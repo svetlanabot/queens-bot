@@ -1,0 +1,544 @@
+import requests
+import uuid
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+
+TOKEN = "8659861967:AAFBIYZ-80OYlCUc7and6ha57h8QHWQIs0U"
+MANAGER_USERNAME = "queens_kushetki64_bot"
+
+YOOKASSA_SHOP_ID = "1347009"
+YOOKASSA_SECRET_KEY = "test_x5hc_FQhdVGm2r1_d0XS6u6kh11IVJ_Em6vD8OuU8OY"
+
+ADMIN_CHAT_ID = 1032572771
+
+
+def create_payment(amount, description):
+    url = "https://api.yookassa.ru/v3/payments"
+
+    data = {
+        "amount": {"value": f"{amount:.2f}", "currency": "RUB"},
+        "confirmation": {"type": "redirect", "return_url": "https://t.me"},
+        "capture": True,
+        "description": description
+    }
+
+    response = requests.post(
+        url,
+        json=data,
+        headers={
+            "Content-Type": "application/json",
+            "Idempotence-Key": str(uuid.uuid4())
+        },
+        auth=(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY)
+    )
+
+    return response.json()
+
+
+def check_payment(payment_id):
+    url = f"https://api.yookassa.ru/v3/payments/{payment_id}"
+
+    response = requests.get(
+        url,
+        auth=(YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY)
+    )
+
+    return response.json()
+
+
+WELCOME_TEXT = (
+    "Добро пожаловать в Queens Kushetki.\n\n"
+    "Мы создаём стильные и удобные кушетки для мастеров красоты, салонов и студий.\n\n"
+    "В боте вы сможете посмотреть модели, узнать стоимость и подобрать кушетку под ваш вид услуг."
+)
+
+BRAND_TEXT = (
+    "Queens Kushetki — производство кушеток для beauty-мастеров.\n\n"
+    "Перед началом работы, пожалуйста, ознакомьтесь с документами."
+)
+
+AGREE_TEXT = (
+    "Перед продолжением работы с ботом необходимо ознакомиться с условиями обработки персональных данных.\n\n"
+    "Нажимая кнопку «Согласен (-на)», вы подтверждаете, что:\n\n"
+    "• ознакомились с Политикой обработки персональных данных;\n"
+    "• даёте согласие на обработку персональных данных;\n"
+    "• даёте согласие на получение информационных сообщений.\n\n"
+    "После подтверждения откроется главное меню."
+)
+
+MAIN_TEXT = (
+    "Главное меню Queens Kushetki.\n\n"
+    "Выберите интересующий раздел:"
+)
+
+LASHES_TEXT = (
+    "Отлично! Наши кушетки модели Loft идеально подходят для наращивания и ламинирования ресниц.\n\n"
+    "Высота у изголовья — 75 см.\n\n"
+    "Изголовье прямое, поэтому мастер хорошо видит основание ресниц и может комфортно работать даже во время длительных процедур.\n\n"
+    "Положение мастера в работе показано на фото."
+)
+
+LOFT_TEXT = (
+    "Модель Loft — гладкая\n\n"
+    "Стильная кушетка для beauty-мастеров, салонов и студий.\n\n"
+    "Цена: от 29 650 ₽\n"
+    "Стоимость зависит от выбранного материала.\n\n"
+    "Размер:\n"
+    "• длина — 180 см\n"
+    "• ширина — 70 см\n"
+    "• высота у изголовья — 75 см\n\n"
+    "Дополнительные опции:\n"
+    "• регулируемое изголовье: +2 500 ₽\n"
+    "• регулируемая опора по высоте: +2 500 ₽\n\n"
+    "Опоры:\n"
+    "• чёрные\n"
+    "• золотые\n\n"
+    "Срок изготовления: 16 рабочих дней.\n\n"
+    "Стоимость указана с учётом действующей акции."
+)
+
+LOFT_STEGKA_TEXT = (
+    "Модель Loft с горизонтальной стяжкой\n\n"
+    "Современная кушетка с акцентной горизонтальной стяжкой.\n\n"
+    "Цена: от 30 800 ₽\n"
+    "Стоимость зависит от выбранного материала.\n\n"
+    "Размер:\n"
+    "• длина — 180 см\n"
+    "• ширина — 70 см\n"
+    "• высота у изголовья — 75 см\n\n"
+    "Дополнительные опции:\n"
+    "• регулируемое изголовье: +2 500 ₽\n"
+    "• крепление для лампы: +350 ₽\n\n"
+    "Опоры:\n"
+    "• чёрные\n"
+    "• золотые\n\n"
+    "Срок изготовления: 16 рабочих дней.\n\n"
+    "Стоимость указана с учётом действующей акции."
+)
+
+LOFT_KUB_TEXT = (
+    "Модель Loft «Кубики»\n\n"
+    "Кушетка с объёмной геометрической стяжкой. Выглядит выразительно и премиально.\n\n"
+    "Цена: от 31 900 ₽\n"
+    "Стоимость зависит от выбранного материала.\n\n"
+    "Дополнительные опции:\n"
+    "• регулируемое изголовье: +2 500 ₽\n\n"
+    "Опоры:\n"
+    "• чёрные\n"
+    "• золотые\n\n"
+    "Срок изготовления: 16 рабочих дней.\n\n"
+    "Стоимость указана с учётом действующей акции."
+)
+
+
+def welcome_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Продолжить", callback_data="show_brand")]
+    ])
+
+
+def policy_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Ознакомиться с политикой", callback_data="show_policy")]
+    ])
+
+
+def agree_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Согласен (-на)", callback_data="agree")]
+    ])
+
+
+def main_menu_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Каталог", callback_data="catalog_start")],
+        [InlineKeyboardButton("Цены", callback_data="prices")],
+        [InlineKeyboardButton("Консультация", callback_data="consult")],
+        [InlineKeyboardButton("О нас", callback_data="about")]
+    ])
+
+
+def service_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Для наращивания и ламинирования ресниц", callback_data="service_lashes")],
+        [InlineKeyboardButton("Для перманентного макияжа", callback_data="service_pmu")],
+        [InlineKeyboardButton("Для косметологии", callback_data="service_cosmo")],
+        [InlineKeyboardButton("Для другого вида услуг", callback_data="service_other")],
+        [InlineKeyboardButton("Назад", callback_data="back_main")]
+    ])
+
+
+def after_lashes_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Перейти в каталог", callback_data="catalog_list")],
+        [InlineKeyboardButton("Консультация", callback_data="consult")],
+        [InlineKeyboardButton("Назад", callback_data="catalog_start")]
+    ])
+
+
+def catalog_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Loft гладкая", callback_data="product_loft")],
+        [InlineKeyboardButton("Loft с горизонтальной стяжкой", callback_data="product_stegka")],
+        [InlineKeyboardButton("Loft кубиками", callback_data="product_kub")],
+        [InlineKeyboardButton("Консультация", callback_data="consult")],
+        [InlineKeyboardButton("Назад", callback_data="catalog_start")]
+    ])
+
+
+def product_keyboard(model):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Оплатить", callback_data=f"pay_{model}")],
+        [InlineKeyboardButton("Заказать через менеджера", callback_data=f"order_{model}")],
+        [InlineKeyboardButton("Назад в каталог", callback_data="catalog_list")],
+        [InlineKeyboardButton("Главное меню", callback_data="back_main")]
+    ])
+
+
+def payment_keyboard(payment_url):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Перейти к оплате", url=payment_url)],
+        [InlineKeyboardButton("Проверить оплату", callback_data="check_payment")],
+        [InlineKeyboardButton("Главное меню", callback_data="back_main")]
+    ])
+
+
+def retry_payment_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Проверить оплату", callback_data="check_payment")],
+        [InlineKeyboardButton("Главное меню", callback_data="back_main")]
+    ])
+
+
+def manager_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Связаться с менеджером", url=f"https://t.me/{MANAGER_USERNAME}")]
+    ])
+
+
+def back_main_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Главное меню", callback_data="back_main")]
+    ])
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_video_note(
+        video_note=open("video.mp4", "rb")
+    )
+
+    await update.message.reply_text(
+        WELCOME_TEXT,
+        reply_markup=welcome_keyboard()
+    )
+
+
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "show_brand":
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=open("baner.jpg", "rb"),
+            caption=BRAND_TEXT,
+            reply_markup=policy_keyboard()
+        )
+
+    elif query.data == "show_policy":
+        await context.bot.send_document(
+            chat_id=query.message.chat_id,
+            document=open("politika.pdf", "rb"),
+            caption="Политика обработки персональных данных"
+        )
+
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=AGREE_TEXT,
+            reply_markup=agree_keyboard()
+        )
+
+    elif query.data == "agree":
+        await query.message.reply_text(
+            MAIN_TEXT,
+            reply_markup=main_menu_keyboard()
+        )
+
+    elif query.data == "back_main":
+        await query.message.reply_text(
+            MAIN_TEXT,
+            reply_markup=main_menu_keyboard()
+        )
+
+    elif query.data == "catalog_start":
+        await query.message.reply_text(
+            "Для какого вида услуг вы выбираете кушетку?",
+            reply_markup=service_keyboard()
+        )
+
+    elif query.data == "service_lashes":
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=open("lashes_position.jpg", "rb"),
+            caption=LASHES_TEXT,
+            reply_markup=after_lashes_keyboard()
+        )
+
+    elif query.data == "service_pmu":
+        await query.message.reply_text(
+            "Для перманентного макияжа важны устойчивость кушетки, удобное положение клиента и комфорт мастера.\n\n"
+            "Вы можете перейти в каталог или запросить консультацию.",
+            reply_markup=after_lashes_keyboard()
+        )
+
+    elif query.data == "service_cosmo":
+        await query.message.reply_text(
+            "Для косметологии важны универсальность, комфорт клиента и удобный доступ мастера к рабочей зоне.\n\n"
+            "Вы можете перейти в каталог или запросить консультацию.",
+            reply_markup=after_lashes_keyboard()
+        )
+
+    elif query.data == "service_other":
+        await query.message.reply_text(
+            "Мы можем подобрать кушетку под разные виды услуг.\n\n"
+            "Перейдите в каталог или оставьте запрос на консультацию.",
+            reply_markup=after_lashes_keyboard()
+        )
+
+    elif query.data == "catalog_list":
+        await query.message.reply_text(
+            "Каталог кушеток Queens Kushetki.\n\n"
+            "Выберите модель:",
+            reply_markup=catalog_keyboard()
+        )
+
+    elif query.data == "product_loft":
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=open("loft.jpg", "rb"),
+            caption=LOFT_TEXT,
+            reply_markup=product_keyboard("loft")
+        )
+
+    elif query.data == "product_stegka":
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=open("loft_stegka.jpg", "rb"),
+            caption=LOFT_STEGKA_TEXT,
+            reply_markup=product_keyboard("stegka")
+        )
+
+    elif query.data == "product_kub":
+        await context.bot.send_photo(
+            chat_id=query.message.chat_id,
+            photo=open("loft_kub.jpg", "rb"),
+            caption=LOFT_KUB_TEXT,
+            reply_markup=product_keyboard("kub")
+        )
+
+    elif query.data in ["order_loft", "order_stegka", "order_kub"]:
+        model_names = {
+            "order_loft": "Loft гладкая",
+            "order_stegka": "Loft с горизонтальной стяжкой",
+            "order_kub": "Loft кубиками"
+        }
+
+        await query.message.reply_text(
+            f"Вы выбрали: {model_names[query.data]}\n\n"
+            "Для оформления заказа вы можете связаться с менеджером.",
+            reply_markup=manager_keyboard()
+        )
+
+    elif query.data in ["pay_loft", "pay_stegka", "pay_kub"]:
+        payment_data = {
+            "pay_loft": {
+                "amount": 29650,
+                "description": "Кушетка Loft гладкая",
+                "model": "Loft гладкая"
+            },
+            "pay_stegka": {
+                "amount": 30800,
+                "description": "Кушетка Loft с горизонтальной стяжкой",
+                "model": "Loft с горизонтальной стяжкой"
+            },
+            "pay_kub": {
+                "amount": 31900,
+                "description": "Кушетка Loft кубиками",
+                "model": "Loft кубиками"
+            }
+        }
+
+        selected = payment_data[query.data]
+        payment = create_payment(selected["amount"], selected["description"])
+
+        if "id" in payment and "confirmation" in payment:
+            context.user_data["payment_id"] = payment["id"]
+            context.user_data["model"] = selected["model"]
+            context.user_data["amount"] = selected["amount"]
+
+            payment_url = payment["confirmation"]["confirmation_url"]
+
+            await query.message.reply_text(
+                f"Вы выбрали: {selected['model']}.\n\n"
+                f"Сумма к оплате: {selected['amount']} ₽\n\n"
+                "После оплаты вернитесь в бот и нажмите кнопку «Проверить оплату».",
+                reply_markup=payment_keyboard(payment_url)
+            )
+        else:
+            await query.message.reply_text(
+                "Не удалось создать платёж. Проверьте данные ЮKassa.",
+                reply_markup=back_main_keyboard()
+            )
+
+    elif query.data == "check_payment":
+        payment_id = context.user_data.get("payment_id")
+
+        if not payment_id:
+            await query.message.reply_text(
+                "Платёж не найден. Сначала нажмите кнопку оплаты.",
+                reply_markup=back_main_keyboard()
+            )
+            return
+
+        payment_info = check_payment(payment_id)
+        status = payment_info.get("status")
+
+        if status == "succeeded":
+            context.user_data["step"] = "fio"
+
+            model = context.user_data.get("model", "не указана")
+            amount = context.user_data.get("amount", "не указана")
+
+            user = query.from_user
+            username = user.username if user.username else "без username"
+
+            await context.bot.send_message(
+                chat_id=ADMIN_CHAT_ID,
+                text=(
+                    "НОВАЯ ОПЛАТА\n\n"
+                    f"Модель: {model}\n"
+                    f"Сумма: {amount} ₽\n"
+                    f"Пользователь: @{username}\n"
+                    f"Telegram ID: {user.id}\n"
+                    f"Payment ID: {payment_id}"
+                )
+            )
+
+            await query.message.reply_text(
+                "Оплата прошла успешно.\n\n"
+                "Для оформления заказа введите, пожалуйста, ваше ФИО:"
+            )
+
+        elif status == "pending":
+            await query.message.reply_text(
+                "Оплата пока не подтверждена.\n\n"
+                "Если вы уже оплатили, подождите несколько секунд и нажмите «Проверить оплату» ещё раз.",
+                reply_markup=retry_payment_keyboard()
+            )
+
+        else:
+            await query.message.reply_text(
+                f"Статус платежа: {status}\n\n"
+                "Если возникла проблема, свяжитесь с менеджером.",
+                reply_markup=manager_keyboard()
+            )
+
+    elif query.data == "prices":
+        await query.message.reply_text(
+            "Цены:\n\n"
+            "• Loft гладкая — от 29 650 ₽\n"
+            "• Loft с горизонтальной стяжкой — от 30 800 ₽\n"
+            "• Loft кубиками — от 31 900 ₽\n\n"
+            "Материал:\n"
+            "• велюр — базовая стоимость\n"
+            "• эко-кожа — +2 000 ₽ к стоимости любой модели\n\n"
+            "Дополнительные опции рассчитываются отдельно.",
+            reply_markup=back_main_keyboard()
+        )
+
+    elif query.data == "consult":
+        await query.message.reply_text(
+            "Консультация\n\n"
+            "Напишите менеджеру, и мы поможем подобрать кушетку под ваш вид услуг, интерьер и бюджет.",
+            reply_markup=manager_keyboard()
+        )
+
+    elif query.data == "about":
+        await query.message.reply_text(
+            "О нас\n\n"
+            "Queens Kushetki — производство стильных и практичных кушеток для beauty-мастеров, салонов и студий.\n\n"
+            "Мы уделяем внимание удобству клиента, внешнему виду изделия и качеству исполнения.",
+            reply_markup=back_main_keyboard()
+        )
+
+
+async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    step = context.user_data.get("step")
+
+    if step == "fio":
+        context.user_data["fio"] = update.message.text
+        context.user_data["step"] = "phone"
+        await update.message.reply_text("Введите номер телефона:")
+        return
+
+    if step == "phone":
+        context.user_data["phone"] = update.message.text
+        context.user_data["step"] = "city"
+        await update.message.reply_text("Введите ваш город:")
+        return
+
+    if step == "city":
+        context.user_data["city"] = update.message.text
+        context.user_data["step"] = "email"
+        await update.message.reply_text("Введите вашу электронную почту:")
+        return
+
+    if step == "email":
+        context.user_data["email"] = update.message.text
+
+        model = context.user_data.get("model", "не указана")
+        amount = context.user_data.get("amount", "не указана")
+        payment_id = context.user_data.get("payment_id", "не указан")
+
+        fio = context.user_data.get("fio")
+        phone = context.user_data.get("phone")
+        city = context.user_data.get("city")
+        email = context.user_data.get("email")
+
+        user = update.effective_user
+        username = user.username if user.username else "без username"
+
+        await update.message.reply_text(
+            "Спасибо за ваш заказ.\n\n"
+            "Ожидайте, с вами свяжутся.\n\n"
+            "Если остались вопросы — свяжитесь с нашим менеджером.",
+            reply_markup=manager_keyboard()
+        )
+
+        await context.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=(
+                "НОВАЯ ЗАЯВКА ПОСЛЕ ОПЛАТЫ\n\n"
+                f"Модель: {model}\n"
+                f"Сумма: {amount} ₽\n\n"
+                f"ФИО: {fio}\n"
+                f"Телефон: {phone}\n"
+                f"Город: {city}\n"
+                f"Email: {email}\n\n"
+                f"Пользователь: @{username}\n"
+                f"Telegram ID: {user.id}\n"
+                f"Payment ID: {payment_id}"
+            )
+        )
+
+        context.user_data.clear()
+
+
+app = ApplicationBuilder().token(TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CallbackQueryHandler(button))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
+
+app.run_polling()

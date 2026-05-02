@@ -1,8 +1,12 @@
+import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import requests
 import uuid
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+
 
 TOKEN = "8659861967:AAFBIYZ-80OYlCUc7and6ha57h8QHWQIs0U"
 MANAGER_USERNAME = "queens_kushetki64_bot"
@@ -13,12 +17,35 @@ YOOKASSA_SECRET_KEY = "test_x5hc_FQhdVGm2r1_d0XS6u6kh11IVJ_Em6vD8OuU8OY"
 ADMIN_CHAT_ID = 1032572771
 
 
+# -------- ТЕХНИЧЕСКИЙ СЕРВЕР ДЛЯ RENDER --------
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is running")
+
+
+def run_health_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    server.serve_forever()
+
+
+# -------- YOOKASSA --------
+
 def create_payment(amount, description):
     url = "https://api.yookassa.ru/v3/payments"
 
     data = {
-        "amount": {"value": f"{amount:.2f}", "currency": "RUB"},
-        "confirmation": {"type": "redirect", "return_url": "https://t.me"},
+        "amount": {
+            "value": f"{amount:.2f}",
+            "currency": "RUB"
+        },
+        "confirmation": {
+            "type": "redirect",
+            "return_url": "https://t.me"
+        },
         "capture": True,
         "description": description
     }
@@ -46,6 +73,18 @@ def check_payment(payment_id):
 
     return response.json()
 
+
+async def safe_admin_message(context, text):
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=text
+        )
+    except Exception:
+        pass
+
+
+# -------- ТЕКСТЫ --------
 
 WELCOME_TEXT = (
     "Добро пожаловать в Queens Kushetki.\n\n"
@@ -75,7 +114,7 @@ MAIN_TEXT = (
 LASHES_TEXT = (
     "Отлично! Наши кушетки модели Loft идеально подходят для наращивания и ламинирования ресниц.\n\n"
     "Высота у изголовья — 75 см.\n\n"
-    "Изголовье прямое, поэтому мастер хорошо видит основание ресниц и может комфортно работать даже во время длительных процедур.\n\n"
+    "Изголовье прямое, поэтому мастер хорошо видит основание ресниц.\n\n"
     "Положение мастера в работе показано на фото."
 )
 
@@ -132,6 +171,8 @@ LOFT_KUB_TEXT = (
 )
 
 
+# -------- КНОПКИ --------
+
 def welcome_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("Продолжить", callback_data="show_brand")]
@@ -165,7 +206,7 @@ def service_keyboard():
         [InlineKeyboardButton("Для перманентного макияжа", callback_data="service_pmu")],
         [InlineKeyboardButton("Для косметологии", callback_data="service_cosmo")],
         [InlineKeyboardButton("Для другого вида услуг", callback_data="service_other")],
-        [InlineKeyboardButton("Назад", callback_data="back_main")]
+        [InlineKeyboardButton("Главное меню", callback_data="back_main")]
     ])
 
 
@@ -223,16 +264,16 @@ def back_main_keyboard():
     ])
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_video_note(
-        video_note=open("video.mp4", "rb")
-    )
+# -------- START --------
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         WELCOME_TEXT,
         reply_markup=welcome_keyboard()
     )
 
+
+# -------- КНОПКИ --------
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -338,14 +379,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     elif query.data in ["order_loft", "order_stegka", "order_kub"]:
-        model_names = {
-            "order_loft": "Loft гладкая",
-            "order_stegka": "Loft с горизонтальной стяжкой",
-            "order_kub": "Loft кубиками"
-        }
-
         await query.message.reply_text(
-            f"Вы выбрали: {model_names[query.data]}\n\n"
             "Для оформления заказа вы можете связаться с менеджером.",
             reply_markup=manager_keyboard()
         )
@@ -409,20 +443,17 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             model = context.user_data.get("model", "не указана")
             amount = context.user_data.get("amount", "не указана")
-
             user = query.from_user
             username = user.username if user.username else "без username"
 
-            await context.bot.send_message(
-                chat_id=ADMIN_CHAT_ID,
-                text=(
-                    "НОВАЯ ОПЛАТА\n\n"
-                    f"Модель: {model}\n"
-                    f"Сумма: {amount} ₽\n"
-                    f"Пользователь: @{username}\n"
-                    f"Telegram ID: {user.id}\n"
-                    f"Payment ID: {payment_id}"
-                )
+            await safe_admin_message(
+                context,
+                "НОВАЯ ОПЛАТА\n\n"
+                f"Модель: {model}\n"
+                f"Сумма: {amount} ₽\n"
+                f"Пользователь: @{username}\n"
+                f"Telegram ID: {user.id}\n"
+                f"Payment ID: {payment_id}"
             )
 
             await query.message.reply_text(
@@ -473,6 +504,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+# -------- СБОР ДАННЫХ --------
+
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("step")
 
@@ -516,24 +549,26 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=manager_keyboard()
         )
 
-        await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID,
-            text=(
-                "НОВАЯ ЗАЯВКА ПОСЛЕ ОПЛАТЫ\n\n"
-                f"Модель: {model}\n"
-                f"Сумма: {amount} ₽\n\n"
-                f"ФИО: {fio}\n"
-                f"Телефон: {phone}\n"
-                f"Город: {city}\n"
-                f"Email: {email}\n\n"
-                f"Пользователь: @{username}\n"
-                f"Telegram ID: {user.id}\n"
-                f"Payment ID: {payment_id}"
-            )
+        await safe_admin_message(
+            context,
+            "НОВАЯ ЗАЯВКА ПОСЛЕ ОПЛАТЫ\n\n"
+            f"Модель: {model}\n"
+            f"Сумма: {amount} ₽\n\n"
+            f"ФИО: {fio}\n"
+            f"Телефон: {phone}\n"
+            f"Город: {city}\n"
+            f"Email: {email}\n\n"
+            f"Пользователь: @{username}\n"
+            f"Telegram ID: {user.id}\n"
+            f"Payment ID: {payment_id}"
         )
 
         context.user_data.clear()
 
+
+# -------- ЗАПУСК --------
+
+threading.Thread(target=run_health_server, daemon=True).start()
 
 app = ApplicationBuilder().token(TOKEN).build()
 

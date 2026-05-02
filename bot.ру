@@ -17,8 +17,6 @@ YOOKASSA_SECRET_KEY = "test_x5hc_FQhdVGm2r1_d0XS6u6kh11IVJ_Em6vD8OuU8OY"
 ADMIN_CHAT_ID = 1032572771
 
 
-# -------- ТЕХНИЧЕСКИЙ СЕРВЕР ДЛЯ RENDER --------
-
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -31,8 +29,6 @@ def run_health_server():
     server = HTTPServer(("0.0.0.0", port), HealthHandler)
     server.serve_forever()
 
-
-# -------- YOOKASSA --------
 
 def create_payment(amount, description):
     url = "https://api.yookassa.ru/v3/payments"
@@ -76,15 +72,10 @@ def check_payment(payment_id):
 
 async def safe_admin_message(context, text):
     try:
-        await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID,
-            text=text
-        )
+        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
     except Exception:
         pass
 
-
-# -------- ТЕКСТЫ --------
 
 WELCOME_TEXT = (
     "Добро пожаловать в Queens Kushetki.\n\n"
@@ -170,8 +161,6 @@ LOFT_KUB_TEXT = (
     "Стоимость указана с учётом действующей акции."
 )
 
-
-# -------- КНОПКИ --------
 
 def welcome_keyboard():
     return InlineKeyboardMarkup([
@@ -264,16 +253,16 @@ def back_main_keyboard():
     ])
 
 
-# -------- START --------
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_video_note(
+        video_note=open("video.mp4", "rb")
+    )
+
     await update.message.reply_text(
         WELCOME_TEXT,
         reply_markup=welcome_keyboard()
     )
 
-
-# -------- КНОПКИ --------
 
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -504,8 +493,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-# -------- СБОР ДАННЫХ --------
-
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("step")
 
@@ -565,8 +552,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data.clear()
 
-
-# -------- ЗАПУСК --------
 
 threading.Thread(target=run_health_server, daemon=True).start()
 
